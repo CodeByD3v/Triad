@@ -6,16 +6,16 @@ router = APIRouter()
 
 @router.get("/leaderboard")
 def get_leaderboard(ward: str = None, limit: int = 10):
-    query = (
-        db.collection("users")
-        .order_by("xp", direction="DESCENDING")
-        .limit(limit)
-    )
+    query = db.collection("users").order_by("xp", direction="DESCENDING")
     users = []
     for doc in query.stream():
         d = doc.to_dict()
+        if ward and d.get("ward") != ward:
+            continue
         d["uid"] = doc.id
         users.append(d)
+        if len(users) >= limit:
+            break
     return {"leaderboard": users}
 
 

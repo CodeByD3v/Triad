@@ -1,5 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  auth,
+  googleProvider,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithPopup,
+} from '../firebase'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: '🗺️' },
@@ -9,7 +16,35 @@ const NAV_ITEMS = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [user, setUser] = useState(null)
+  const [authBusy, setAuthBusy] = useState(false)
   const location = useLocation()
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser)
+      if (!currentUser) {
+        try {
+          await signInAnonymously(auth)
+        } catch (error) {
+          console.error('Anonymous sign-in failed', error)
+        }
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  async function handleGoogleSignIn() {
+    setAuthBusy(true)
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (error) {
+      console.error('Google sign-in failed', error)
+    } finally {
+      setAuthBusy(false)
+    }
+  }
 
   return (
     <nav style={{
@@ -74,6 +109,31 @@ export default function Navbar() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            lineHeight: 1.1,
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
+          }}>
+            <span>{user ? (user.isAnonymous ? 'Guest mode' : 'Signed in') : 'Not signed in'}</span>
+            <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.displayName || user?.email || user?.uid || 'Not signed in'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleGoogleSignIn}
+            disabled={authBusy}
+            className="btn-secondary"
+            style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}
+          >
+            {authBusy ? 'Signing in…' : 'Google Sign-in'}
+          </button>
         </div>
 
         {/* Mobile Toggle */}

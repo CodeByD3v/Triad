@@ -1,6 +1,11 @@
-// Firebase SDK initialization
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously } from 'firebase/auth'
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithPopup,
+} from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,4 +20,10 @@ const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 const googleProvider = new GoogleAuthProvider()
 
-export { auth, googleProvider, signInWithPopup, signInAnonymously }
+export {
+  auth,
+  googleProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInAnonymously,
+}

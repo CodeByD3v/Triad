@@ -6,7 +6,6 @@ from agents.dedup import check_for_duplicate
 from agents.geocode import reverse_geocode
 from agents.grievance import draft_grievance_letter
 import uuid
-import os
 
 router = APIRouter()
 
@@ -99,6 +98,66 @@ async def create_issue(
         "issue_id": issue_id,
         "ai_analysis": ai_data,
     }
+
+
+@router.patch("/issues/{issue_id}")
+async def update_issue(
+    issue_id: str,
+    title: str | None = Form(None),
+    description: str | None = Form(None),
+    status: str | None = Form(None),
+):
+    """Updates editable issue fields."""
+    doc_ref = db.collection("issues").document(issue_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    updates = {}
+    if title is not None:
+        updates["title"] = title
+    if description is not None:
+        updates["description"] = description
+    if status is not None:
+        updates["status"] = status
+    if not updates:
+        return {"status": "noop", "issue_id": issue_id}
+
+    updates["last_updated_at"] = fs.SERVER_TIMESTAMP
+    doc_ref.update(updates)
+    return {"status": "updated", "issue_id": issue_id, "updated_fields": list(updates.keys())}
+
+
+@router.patch("/issues/{issue_id}/status")
+async def update_issue_status(issue_id: str, status: str = Form(...)):
+    """Explicit status transition endpoint for moderation and resolution flows."""
+    doc_ref = db.collection("issues").document(issue_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    doc_ref.update(
+        {
+            "status": status,
+            "last_updated_at": fs.SERVER_TIMESTAMP,
+        }
+    )
+    return {"status": "updated", "issue_id": issue_id, "issue_status": status}
+
+
+@router.delete("/issues/{issue_id}")
+async def delete_issue(issue_id: str):
+    """Deletes an issue and its nested verifications."""
+    doc_ref = db.collection("issues").document(issue_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    verifications = doc_ref.collection("verifications").stream()
+    for verif in verifications:
+        verif.reference.delete()
+    doc_ref.delete()
+    return {"status": "deleted", "issue_id": issue_id}
 
 
 @router.get("/issues")

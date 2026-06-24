@@ -65,7 +65,6 @@ export default function Navbar() {
         justifyContent: 'space-between',
         height: 64,
       }}>
-        {/* Logo */}
         <NavLink to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 36,
@@ -92,7 +91,6 @@ export default function Navbar() {
           </span>
         </NavLink>
 
-        {/* Desktop Nav */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -121,8 +119,8 @@ export default function Navbar() {
             color: 'var(--text-muted)',
           }}>
             <span>{user ? (user.isAnonymous ? 'Guest mode' : 'Signed in') : 'Not signed in'}</span>
-            <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.displayName || user?.email || user?.uid || 'Not signed in'}
+            <span>
+              {user ? (user.isAnonymous ? 'Anonymous session' : (user.displayName || user.email || 'Signed in')) : 'Not signed in'}
             </span>
           </div>
           <button
@@ -136,7 +134,6 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Mobile Toggle */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
           className="mobile-toggle"
@@ -154,7 +151,6 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Mobile Menu */}
       {mobileOpen && (
         <div
           className="mobile-menu"

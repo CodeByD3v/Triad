@@ -1,35 +1,27 @@
-import os
 from pathlib import Path
 
 import firebase_admin
-from firebase_admin import credentials, firestore, storage
+from firebase_admin import credentials, firestore
 
 
 class _UnavailableFirebase:
     def __getattr__(self, name):
         raise RuntimeError(
             "Firebase is not configured locally. Provide serviceAccountKey.json "
-            "or Application Default Credentials before using Firestore/Storage."
+            "or Application Default Credentials before using Firestore."
         )
 
 
-_service_account_path = Path("serviceAccountKey.json")
+_service_account_path = Path(__file__).with_name("serviceAccountKey.json")
 
 try:
     if _service_account_path.exists():
         cred = credentials.Certificate(str(_service_account_path))
-        firebase_admin.initialize_app(
-            cred,
-            {"storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET")},
-        )
+        firebase_admin.initialize_app(cred)
     else:
-        firebase_admin.initialize_app(
-            options={"storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET")}
-        )
+        firebase_admin.initialize_app()
 
     db = firestore.client()
-    bucket = storage.bucket()
 except Exception:
     # Keep the API importable even when Firebase credentials are missing.
     db = _UnavailableFirebase()
-    bucket = _UnavailableFirebase()

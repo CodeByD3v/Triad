@@ -1,34 +1,27 @@
 import requests
-import os
 
-GEOCODING_URL = "https://maps.googleapis.com/maps/api/geocode/json"
-MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
+USER_AGENT = "community-hero-app"
 
 
 def reverse_geocode(lat: float, lng: float) -> str:
-    """
-    Calls Google Geocoding API to get a human-readable ward/locality name.
-    Falls back to coordinate string if API key is unavailable.
-    """
-    if not MAPS_API_KEY:
-        return f"{lat:.4f}, {lng:.4f}"
+    fallback = f"{lat:.4f}, {lng:.4f}"
 
-    resp = requests.get(
-        GEOCODING_URL,
-        params={
-            "latlng": f"{lat},{lng}",
-            "key": MAPS_API_KEY,
-            "result_type": "sublocality|locality",
-            "language": "en",
-        },
-        timeout=5,
-    )
+    try:
+        resp = requests.get(
+            NOMINATIM_URL,
+            params={"lat": lat, "lon": lng, "format": "json"},
+            headers={"User-Agent": USER_AGENT},
+            timeout=5,
+        )
+        resp.raise_for_status()
 
-    if resp.status_code == 200:
-        results = resp.json().get("results", [])
-        if results:
-            return results[0].get(
-                "formatted_address", f"{lat:.4f}, {lng:.4f}"
-            )
+        address = resp.json().get("address", {})
+        for field in ("suburb", "city_district", "neighbourhood", "county", "city"):
+            value = address.get(field)
+            if value:
+                return value
+    except Exception:
+        pass
 
-    return f"{lat:.4f}, {lng:.4f}"
+    return fallback

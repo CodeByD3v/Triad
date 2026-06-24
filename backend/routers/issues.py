@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
-from firebase_admin import firestore as fs, storage
-from firebase_client import db, bucket
+from firebase_admin import firestore as fs
+from firebase_client import db
+from storage import upload_image
 from agents.triage import run_visual_triage
 from agents.dedup import check_for_duplicate
 from agents.geocode import reverse_geocode
@@ -21,7 +22,7 @@ async def create_issue(
 ):
     """
     Full agentic pipeline:
-    1. Upload image to Firebase Storage
+    1. Upload image to S3
     2. Run Gemini Flash visual triage
     3. Check for duplicates within 50m
     4. Save new issue OR upvote existing
@@ -30,11 +31,7 @@ async def create_issue(
     """
     # Step 1: Upload image
     image_bytes = await image.read()
-    filename = f"issues/{uuid.uuid4()}.jpg"
-    blob = bucket.blob(filename)
-    blob.upload_from_string(image_bytes, content_type=image.content_type)
-    blob.make_public()
-    image_url = blob.public_url
+    image_url = upload_image(image_bytes, image.content_type)
 
     # Step 2: Visual triage
     ai_data = await run_visual_triage(

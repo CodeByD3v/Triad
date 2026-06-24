@@ -1,290 +1,193 @@
 import { useEffect, useState } from 'react'
-import TransparencyScore from '../components/TransparencyScore'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE
 
-const BADGE_INFO = {
-  first_reporter: { icon: '🎯', label: 'First Reporter', desc: 'Submitted your first report' },
-  community_helper: { icon: '🤝', label: 'Community Helper', desc: 'Earned 50 XP' },
-  civic_champion: { icon: '🏅', label: 'Civic Champion', desc: 'Earned 200 XP' },
-  ward_guardian: { icon: '🛡️', label: 'Ward Guardian', desc: 'Earned 500 XP' },
-  verifier: { icon: '✅', label: 'Verifier', desc: 'Verified a community issue' },
+const BADGE_META = {
+  first_reporter:   { icon: '🌱', label: 'First Reporter',   desc: 'Submitted your first issue' },
+  community_helper: { icon: '🤝', label: 'Community Helper', desc: 'Confirmed 10+ existing issues' },
+  civic_champion:   { icon: '🏆', label: 'Civic Champion',   desc: 'Earned 200+ XP' },
+  ward_guardian:    { icon: '🛡️', label: 'Ward Guardian',    desc: 'Earned 500+ XP' },
 }
 
-const RANK_ICONS = ['👑', '🥈', '🥉']
+const XP_ACTIONS = [
+  { action: 'Submit a new issue',        xp: '+20 XP' },
+  { action: 'Confirm an existing issue', xp: '+5 XP'  },
+  { action: 'Issue gets verified',       xp: '+10 XP' },
+  { action: 'Upvote a report',           xp: '+2 XP'  },
+]
 
 export default function Leaderboard() {
-  const [leaders, setLeaders] = useState([])
-  const [wards, setWards] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('citizens') // 'citizens' or 'wards'
+  const [users, setUsers]         = useState([])
+  const [wards, setWards]         = useState([])
+  const [tab, setTab]             = useState('citizens')
+  const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
     Promise.all([
-      fetch(`${API_BASE}/api/leaderboard?limit=20`).then(r => r.json()).catch(() => ({ leaderboard: [] })),
-      fetch(`${API_BASE}/api/analytics/transparency`).then(r => r.json()).catch(() => ({ wards: [] })),
-    ]).then(([leaderData, wardData]) => {
-      setLeaders(leaderData.leaderboard || [])
-      setWards(wardData.wards || [])
+      fetch(`${API_BASE}/api/leaderboard?limit=20`).then(r => r.json()),
+      fetch(`${API_BASE}/api/analytics/transparency`).then(r => r.json()),
+    ]).then(([lb, tr]) => {
+      setUsers(lb.leaderboard || [])
+      setWards(tr.wards || [])
       setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [])
 
   return (
-    <div className="page-container animate-fade-in">
-      <h1 className="page-title">Leaderboard</h1>
-      <p className="page-subtitle">Top community heroes making a difference</p>
+    <div className="max-w-2xl mx-auto p-4 space-y-6">
 
-      {/* Tab Switcher */}
-      <div style={{
-        display: 'flex',
-        gap: 8,
-        marginBottom: 24,
-      }}>
-        <button
-          className={`filter-pill ${tab === 'citizens' ? 'active' : ''}`}
-          onClick={() => setTab('citizens')}
-        >
-          👤 Top Citizens
-        </button>
-        <button
-          className={`filter-pill ${tab === 'wards' ? 'active' : ''}`}
-          onClick={() => setTab('wards')}
-        >
-          🏘️ Ward Transparency
-        </button>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Community Leaderboard</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Earn XP by reporting and verifying civic issues
+        </p>
       </div>
 
-      {loading ? (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className="skeleton" style={{ height: 72, borderRadius: 'var(--radius-lg)' }} />
+      {/* XP guide */}
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">
+          How to earn XP
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {XP_ACTIONS.map(({ action, xp }) => (
+            <div key={action} className="flex items-center justify-between
+                                         bg-white rounded-xl px-3 py-2 text-sm">
+              <span className="text-gray-700">{action}</span>
+              <span className="font-semibold text-blue-600 ml-2 shrink-0">{xp}</span>
+            </div>
           ))}
         </div>
-      ) : tab === 'citizens' ? (
-        /* Citizens Leaderboard */
-        <div>
-          {/* Top 3 Podium */}
-          {leaders.length >= 3 && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: 12,
-              marginBottom: 24,
-            }}>
-              {[1, 0, 2].map((idx) => {
-                const user = leaders[idx]
-                if (!user) return null
-                const isFirst = idx === 0
-                return (
-                  <div
-                    key={user.uid}
-                    className="glass-card"
-                    style={{
-                      padding: isFirst ? '24px 16px' : '20px 16px',
-                      textAlign: 'center',
-                      transform: isFirst ? 'scale(1.05)' : 'none',
-                      zIndex: isFirst ? 1 : 0,
-                      borderColor: isFirst ? 'rgba(245, 158, 11, 0.3)' : undefined,
-                    }}
-                  >
-                    <div style={{
-                      fontSize: isFirst ? '2rem' : '1.5rem',
-                      marginBottom: 8,
-                    }}>
-                      {RANK_ICONS[idx]}
-                    </div>
-                    <div style={{
-                      width: isFirst ? 56 : 44,
-                      height: isFirst ? 56 : 44,
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-400))',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 8px',
-                      fontSize: isFirst ? '1.2rem' : '1rem',
-                      fontWeight: 800,
-                      color: 'white',
-                    }}>
-                      {(user.display_name || user.uid)?.[0]?.toUpperCase() || '?'}
-                    </div>
-                    <p style={{
-                      fontWeight: 600,
-                      fontSize: isFirst ? '0.95rem' : '0.85rem',
-                      margin: '0 0 4px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {user.display_name || user.uid?.slice(0, 8)}
-                    </p>
-                    <span className="xp-badge" style={{ fontSize: '0.7rem' }}>
-                      ⚡ {user.xp || 0} XP
-                    </span>
-                    {user.badges && user.badges.length > 0 && (
-                      <div style={{ marginTop: 8, display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                        {user.badges.map(b => (
-                          <span key={b} title={BADGE_INFO[b]?.label} style={{ fontSize: '0.9rem' }}>
-                            {BADGE_INFO[b]?.icon || '🏷️'}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      </div>
 
-          {/* Rest of the list */}
-          <div style={{ display: 'grid', gap: 8 }}>
-            {leaders.slice(3).map((user, i) => (
-              <div
-                key={user.uid}
-                className="glass-card"
-                style={{
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <span style={{
-                  width: 28,
-                  textAlign: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  color: 'var(--text-muted)',
-                }}>
-                  #{i + 4}
-                </span>
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  background: 'var(--surface-elevated)',
-                  border: '1px solid var(--surface-border)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  color: 'var(--text-accent)',
-                  flexShrink: 0,
-                }}>
-                  {(user.display_name || user.uid)?.[0]?.toUpperCase() || '?'}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    margin: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {user.display_name || user.uid?.slice(0, 12)}
-                  </p>
-                  {user.badges && user.badges.length > 0 && (
-                    <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
-                      {user.badges.map(b => (
-                        <span key={b} style={{ fontSize: '0.75rem' }}>{BADGE_INFO[b]?.icon || '🏷️'}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <span className="xp-badge">⚡ {user.xp || 0} XP</span>
-              </div>
-            ))}
-          </div>
+      {/* Tab switcher */}
+      <div className="flex bg-gray-100 rounded-xl p-1">
+        {[
+          { key: 'citizens', label: '👤 Citizens' },
+          { key: 'wards',    label: '🏘 Wards'    },
+          { key: 'badges',   label: '🏅 Badges'   },
+        ].map(({ key, label }) => (
+          <button key={key}
+            onClick={() => setTab(key)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition
+              ${tab === key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {leaders.length === 0 && (
-            <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-              No citizens on the leaderboard yet. Be the first to report an issue!
-            </div>
-          )}
-
-          {/* Badge Legend */}
-          <div className="glass-card" style={{ padding: 20, marginTop: 24 }}>
-            <h3 style={{
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: 12,
-            }}>
-              🏆 Available Badges
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-              {Object.entries(BADGE_INFO).map(([key, info]) => (
-                <div key={key} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 12px',
-                  background: 'var(--surface-elevated)',
-                  borderRadius: 'var(--radius-sm)',
-                }}>
-                  <span style={{ fontSize: '1.2rem' }}>{info.icon}</span>
-                  <div>
-                    <p style={{ fontWeight: 600, fontSize: '0.8rem', margin: 0 }}>{info.label}</p>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>{info.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Ward Transparency Scores */
-        <div>
-          {wards.length === 0 ? (
-            <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-              No ward data available yet. Submit issues to start building transparency scores.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
-              {wards.map((ward, i) => (
-                <div key={ward.ward_name} className="glass-card" style={{ padding: 20 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{
-                        fontSize: '1rem',
-                        fontWeight: 700,
-                        margin: '0 0 4px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {ward.ward_name}
-                      </h3>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-                        Rank #{i + 1}
-                      </p>
-                      <div style={{ display: 'grid', gap: 6, fontSize: '0.8rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Issues Raised</span>
-                          <span style={{ fontWeight: 600 }}>{ward.issues_raised || 0}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>Issues Resolved</span>
-                          <span style={{ fontWeight: 600, color: '#86efac' }}>{ward.issues_resolved || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <TransparencyScore
-                      score={ward.transparency_score || 0}
-                      size={80}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {loading && (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       )}
+
+      {/* Citizens tab */}
+      {!loading && tab === 'citizens' && (
+        <div className="space-y-2">
+          {users.length === 0 && (
+            <p className="text-center text-gray-400 py-8">No citizens yet — be the first!</p>
+          )}
+          {users.map((user, i) => (
+            <div key={user.uid}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4
+                         flex items-center gap-4">
+              {/* Rank */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center
+                               font-bold text-sm shrink-0
+                ${i === 0 ? 'bg-yellow-100 text-yellow-700' :
+                  i === 1 ? 'bg-gray-100 text-gray-600' :
+                  i === 2 ? 'bg-orange-100 text-orange-600' :
+                  'bg-blue-50 text-blue-600'}`}>
+                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-gray-900 truncate">
+                  {user.display_name || user.uid?.slice(0, 8) || 'Anonymous'}
+                </p>
+                {/* Badges */}
+                {user.badges?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {user.badges.map(b => (
+                      <span key={b} className="text-xs bg-gray-50 border border-gray-100
+                                               rounded-full px-2 py-0.5">
+                        {BADGE_META[b]?.icon} {BADGE_META[b]?.label || b}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* XP */}
+              <div className="text-right shrink-0">
+                <p className="font-bold text-blue-600">{user.xp || 0}</p>
+                <p className="text-xs text-gray-400">XP</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Wards tab — Civic Transparency Score */}
+      {!loading && tab === 'wards' && (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500 px-1">
+            Transparency Score = issues resolved in last 30 days ÷ issues raised × 100
+          </p>
+          {wards.length === 0 && (
+            <p className="text-center text-gray-400 py-8">No ward data yet</p>
+          )}
+          {wards.map((ward, i) => {
+            const score = ward.transparency_score || 0
+            const color = score >= 70 ? 'bg-green-500'
+                        : score >= 40 ? 'bg-amber-500'
+                        : 'bg-red-500'
+            return (
+              <div key={ward.ward_name}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      #{i + 1} {ward.ward_name}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {ward.issues_resolved}/{ward.issues_raised} issues resolved
+                    </p>
+                  </div>
+                  <span className={`text-white text-sm font-bold px-3 py-1 rounded-full ${color}`}>
+                    {score}%
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${color}`}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Badges tab */}
+      {!loading && tab === 'badges' && (
+        <div className="grid grid-cols-2 gap-3">
+          {Object.entries(BADGE_META).map(([key, { icon, label, desc }]) => (
+            <div key={key}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+              <div className="text-3xl mb-2">{icon}</div>
+              <p className="font-semibold text-gray-900 text-sm">{label}</p>
+              <p className="text-xs text-gray-400 mt-1">{desc}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   )
 }

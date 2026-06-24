@@ -1,21 +1,28 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, CircleMarker } from 'react-leaflet'
-import SeverityBadge from '../components/SeverityBadge'
-import 'leaflet/dist/leaflet.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE
 
-const STATUS_TIMELINE = ['Reported', 'Verified', 'In-Progress', 'Escalated', 'Resolved']
+const STATUS_COLORS = {
+  Reported:    'bg-yellow-100 text-yellow-800 border-yellow-200',
+  Verified:    'bg-blue-100 text-blue-800 border-blue-200',
+  'In-Progress': 'bg-purple-100 text-purple-800 border-purple-200',
+  Escalated:   'bg-orange-100 text-orange-800 border-orange-200',
+  Resolved:    'bg-green-100 text-green-800 border-green-200',
+}
+
+const SEVERITY_COLOR = (s) =>
+  s >= 8 ? 'text-red-600' : s >= 5 ? 'text-amber-600' : 'text-green-600'
 
 export default function IssueDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [issue, setIssue] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [grievanceLetter, setGrievanceLetter] = useState(null)
-  const [generatingLetter, setGeneratingLetter] = useState(false)
-  const [upvoting, setUpvoting] = useState(false)
+  const [issue, setIssue]       = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [letter, setLetter]     = useState('')
+  const [genLoading, setGenLoading] = useState(false)
+  const [copied, setCopied]     = useState(false)
+  const [upvoted, setUpvoted]   = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/issues/${id}`)
@@ -24,323 +31,186 @@ export default function IssueDetail() {
       .catch(() => setLoading(false))
   }, [id])
 
-  async function handleUpvote() {
-    setUpvoting(true)
+  async function handleGenerateLetter() {
+    setGenLoading(true)
+    setLetter('')
     try {
-      const fd = new FormData()
-      fd.append('user_id', 'anonymous')
-      await fetch(`${API_BASE}/api/issues/${id}/upvote`, { method: 'POST', body: fd })
-      setIssue(prev => ({ ...prev, upvotes: (prev.upvotes || 0) + 1 }))
-    } catch (_) {}
-    setUpvoting(false)
-  }
-
-  async function handleGenerateGrievance() {
-    setGeneratingLetter(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/issues/${id}/grievance`, { method: 'POST' })
+      const res  = await fetch(`${API_BASE}/api/issues/${id}/grievance`, { method: 'POST' })
       const data = await res.json()
-      setGrievanceLetter(data.letter)
-    } catch (_) {
-      setGrievanceLetter('Failed to generate letter. Please try again.')
+      setLetter(data.letter || '')
+    } catch {
+      setLetter('Failed to generate letter. Please try again.')
+    } finally {
+      setGenLoading(false)
     }
-    setGeneratingLetter(false)
   }
 
-  function getStatusClass(s) {
-    return s?.toLowerCase().replace(/[^a-z]/g, '-') || 'reported'
+  async function handleUpvote() {
+    await fetch(`${API_BASE}/api/issues/${id}/upvote`, {
+      method: 'POST',
+      body: new URLSearchParams({ user_id: 'anonymous' }),
+    })
+    setUpvoted(true)
+    setIssue(prev => ({ ...prev, upvotes: (prev.upvotes || 0) + 1 }))
   }
 
-  if (loading) {
-    return (
-      <div className="page-container" style={{ maxWidth: 700 }}>
-        <div className="skeleton" style={{ height: 24, width: 200, marginBottom: 16 }} />
-        <div className="skeleton" style={{ height: 300, marginBottom: 16 }} />
-        <div className="skeleton" style={{ height: 100 }} />
-      </div>
-    )
+  function handleCopy() {
+    navigator.clipboard.writeText(letter)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  if (!issue) {
-    return (
-      <div className="page-container" style={{ textAlign: 'center' }}>
-        <h2 style={{ color: 'var(--text-secondary)' }}>Issue not found</h2>
-        <button className="btn-primary" onClick={() => navigate('/')}>Back to Dashboard</button>
-      </div>
-    )
+  function handleEmailAuthority() {
+    const subject = encodeURIComponent(`Community Issue Report — ${issue?.category}`)
+    const body    = encodeURIComponent(letter)
+    window.open(`mailto:?subject=${subject}&body=${body}`)
   }
 
-  const statusIdx = STATUS_TIMELINE.indexOf(issue.status)
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+    </div>
+  )
+
+  if (!issue) return (
+    <div className="max-w-2xl mx-auto p-6 text-center">
+      <p className="text-gray-500">Issue not found.</p>
+      <button onClick={() => navigate('/')} className="mt-4 text-blue-600 underline">
+        Back to map
+      </button>
+    </div>
+  )
 
   return (
-    <div className="page-container animate-fade-in" style={{ maxWidth: 700 }}>
-      {/* Back button */}
-      <button
-        className="btn-ghost"
-        onClick={() => navigate('/')}
-        style={{ marginBottom: 16, padding: '8px 12px' }}
-      >
-        ← Back to Dashboard
+    <div className="max-w-2xl mx-auto p-4 space-y-6">
+
+      {/* Back */}
+      <button onClick={() => navigate(-1)} className="text-blue-600 text-sm flex items-center gap-1">
+        ← Back
       </button>
 
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 8px' }}>
-            {issue.category}
-          </h1>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={`status-badge ${getStatusClass(issue.status)}`}>{issue.status}</span>
-            <SeverityBadge score={issue.severity_score} />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              📍 {issue.location?.ward_name}
+      {/* Header card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {issue.image_url && (
+          <img src={issue.image_url} alt="Issue" className="w-full h-56 object-cover" />
+        )}
+        <div className="p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-xl font-semibold text-gray-900">{issue.title}</h1>
+            <span className={`text-xs px-2 py-1 rounded-full border font-medium shrink-0
+              ${STATUS_COLORS[issue.status] || 'bg-gray-100 text-gray-700'}`}>
+              {issue.status}
             </span>
           </div>
-        </div>
-        <button
-          className="btn-secondary"
-          onClick={handleUpvote}
-          disabled={upvoting}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          👍 Upvote ({issue.upvotes || 0})
-        </button>
-      </div>
 
-      {/* Image */}
-      {issue.image_url && (
-        <div className="glass-card" style={{ padding: 4, marginBottom: 16, overflow: 'hidden' }}>
-          <img
-            src={issue.image_url}
-            alt={issue.category}
-            style={{
-              width: '100%',
-              maxHeight: 400,
-              objectFit: 'cover',
-              borderRadius: 'calc(var(--radius-lg) - 4px)',
-              display: 'block',
-            }}
-          />
-        </div>
-      )}
+          <p className="text-gray-600 text-sm">{issue.summary}</p>
 
-      {/* AI Analysis */}
-      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
-        <h3 style={{
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: 12,
-        }}>
-          🤖 AI Analysis
-        </h3>
-        <p style={{ fontSize: '0.95rem', lineHeight: 1.6, margin: '0 0 12px' }}>
-          {issue.summary}
-        </p>
-        {issue.description && (
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
-            <strong>User Description:</strong> {issue.description}
-          </p>
-        )}
-        {issue.tags && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {issue.tags.map((tag, i) => (
-              <span key={i} style={{
-                padding: '2px 10px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '0.75rem',
-                background: 'rgba(99, 102, 241, 0.1)',
-                color: 'var(--text-accent)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
-              }}>
-                {tag}
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-1">
+            <span>
+              Severity:{' '}
+              <span className={`font-semibold ${SEVERITY_COLOR(issue.severity_score)}`}>
+                {issue.severity_score}/10
               </span>
-            ))}
+            </span>
+            <span>📍 {issue.location?.ward_name}</span>
+            <span>👍 {issue.upvotes} upvotes</span>
+            <span>🏷 {issue.category}</span>
           </div>
-        )}
-      </div>
 
-      {/* Status Timeline */}
-      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
-        <h3 style={{
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: 16,
-        }}>
-          📊 Status Timeline
-        </h3>
-        <div style={{ display: 'flex', gap: 0, alignItems: 'center' }}>
-          {STATUS_TIMELINE.map((s, i) => {
-            const isActive = i <= statusIdx
-            const isCurrent = i === statusIdx
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', flex: i < STATUS_TIMELINE.length - 1 ? 1 : 'none' }}>
-                <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 6,
-                  minWidth: 50,
-                }}>
-                  <div style={{
-                    width: isCurrent ? 16 : 12,
-                    height: isCurrent ? 16 : 12,
-                    borderRadius: '50%',
-                    background: isActive
-                      ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400))'
-                      : 'var(--surface-border)',
-                    boxShadow: isCurrent ? '0 0 12px rgba(99, 102, 241, 0.5)' : 'none',
-                    transition: 'all 0.3s ease',
-                  }} />
-                  <span style={{
-                    fontSize: '0.65rem',
-                    fontWeight: isActive ? 600 : 400,
-                    color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                    textAlign: 'center',
-                    lineHeight: 1.2,
-                  }}>
-                    {s}
-                  </span>
-                </div>
-                {i < STATUS_TIMELINE.length - 1 && (
-                  <div style={{
-                    flex: 1,
-                    height: 2,
-                    background: i < statusIdx
-                      ? 'var(--color-primary-500)'
-                      : 'var(--surface-border)',
-                    marginBottom: 20,
-                    transition: 'background 0.3s ease',
-                  }} />
-                )}
-              </div>
-            )
-          })}
+          {/* Tags */}
+          {issue.tags?.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {issue.tags.map(tag => (
+                <span key={tag}
+                  className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Upvote */}
+          <button
+            onClick={handleUpvote}
+            disabled={upvoted}
+            className={`w-full mt-2 py-2 rounded-xl text-sm font-medium transition
+              ${upvoted
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'}`}
+          >
+            {upvoted ? '✓ Upvoted' : '👍 Confirm this issue exists'}
+          </button>
         </div>
       </div>
 
-      {/* Mini Map */}
-      {issue.location && (
-        <div className="glass-card" style={{ padding: 4, marginBottom: 16, overflow: 'hidden' }}>
-          <MapContainer
-            center={[issue.location.latitude, issue.location.longitude]}
-            zoom={15}
-            style={{ height: 200, borderRadius: 'calc(var(--radius-lg) - 4px)' }}
-            zoomControl={false}
-            dragging={false}
-          >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-            <CircleMarker
-              center={[issue.location.latitude, issue.location.longitude]}
-              radius={10}
-              fillColor={issue.severity_score >= 8 ? '#ef4444' : issue.severity_score >= 5 ? '#f59e0b' : '#22c55e'}
-              color="white"
-              weight={2}
-              fillOpacity={0.9}
-            />
-          </MapContainer>
+      {/* AI Analysis card */}
+      {issue.ai_analysis && (
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">
+            AI Analysis
+          </p>
+          <p className="text-sm text-blue-900">{issue.ai_analysis.summary}</p>
         </div>
       )}
 
-      {/* Escalation info */}
-      {issue.escalation_reason && (
-        <div className="glass-card" style={{ padding: 20, marginBottom: 16, borderColor: 'rgba(239, 68, 68, 0.3)' }}>
-          <h3 style={{
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: '#fca5a5',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: 8,
-          }}>
-            🚨 Escalation Notice
-          </h3>
-          <p style={{ fontSize: '0.85rem', lineHeight: 1.6, margin: 0, color: 'var(--text-secondary)' }}>
-            {issue.escalation_reason}
+      {/* Escalation notice */}
+      {issue.status === 'Escalated' && issue.escalation_reason && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-2">
+            🚨 Escalated to Authorities
           </p>
+          <p className="text-sm text-orange-900">{issue.escalation_reason}</p>
         </div>
       )}
 
       {/* Grievance Letter Generator */}
-      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
-        <h3 style={{
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: 12,
-        }}>
-          📄 Grievance Letter Generator
-        </h3>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
-          Generate a formal grievance letter addressed to the Municipal Corporation using AI.
-        </p>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-gray-900">Generate Grievance Letter</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Gemini Pro drafts a formal letter to the Municipal Corporation
+          </p>
+        </div>
 
-        {!grievanceLetter ? (
-          <button
-            className="btn-primary"
-            onClick={handleGenerateGrievance}
-            disabled={generatingLetter}
-          >
-            {generatingLetter ? (
-              <>
-                <span style={{
-                  width: 16, height: 16,
-                  border: '2px solid rgba(255,255,255,0.3)',
-                  borderTopColor: 'white',
-                  borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
-                  display: 'inline-block',
-                }} />
-                Generating with Gemini Pro…
-              </>
-            ) : (
-              '✍️ Generate Grievance Letter'
-            )}
-          </button>
-        ) : (
-          <div>
-            <div style={{
-              background: 'var(--surface-elevated)',
-              borderRadius: 'var(--radius-md)',
-              padding: 16,
-              marginBottom: 12,
-              maxHeight: 400,
-              overflowY: 'auto',
-              whiteSpace: 'pre-wrap',
-              fontSize: '0.85rem',
-              lineHeight: 1.7,
-              fontFamily: "'Georgia', serif",
-              color: 'var(--text-secondary)',
-            }}>
-              {grievanceLetter}
+        <button
+          onClick={handleGenerateLetter}
+          disabled={genLoading}
+          className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium
+                     hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"
+        >
+          {genLoading
+            ? <><span className="animate-spin">⏳</span> Drafting with Gemini Pro…</>
+            : '📄 Generate Official Grievance Letter'}
+        </button>
+
+        {letter && (
+          <div className="space-y-3">
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+              <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
+                {letter}
+              </pre>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="flex gap-2">
               <button
-                className="btn-secondary"
-                onClick={() => navigator.clipboard.writeText(grievanceLetter)}
+                onClick={handleCopy}
+                className="flex-1 py-2 rounded-xl border border-gray-200 text-sm
+                           hover:bg-gray-50 transition font-medium"
               >
-                📋 Copy to Clipboard
+                {copied ? '✓ Copied!' : '📋 Copy'}
               </button>
-              <button className="btn-ghost" onClick={() => setGrievanceLetter(null)}>
-                Regenerate
+              <button
+                onClick={handleEmailAuthority}
+                className="flex-1 py-2 rounded-xl bg-green-600 text-white text-sm
+                           hover:bg-green-700 transition font-medium"
+              >
+                ✉️ Email Authority
               </button>
             </div>
           </div>
         )}
       </div>
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   )
 }

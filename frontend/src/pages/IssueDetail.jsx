@@ -1,28 +1,28 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import SeverityBadge from '../components/SeverityBadge'
 
-const API_BASE = import.meta.env.VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
-const STATUS_COLORS = {
-  Reported:    'bg-yellow-100 text-yellow-800 border-yellow-200',
-  Verified:    'bg-blue-100 text-blue-800 border-blue-200',
-  'In-Progress': 'bg-purple-100 text-purple-800 border-purple-200',
-  Escalated:   'bg-orange-100 text-orange-800 border-orange-200',
-  Resolved:    'bg-green-100 text-green-800 border-green-200',
+const STATUS_STYLE = {
+  Reported:      { bg: 'rgba(99,102,241,0.15)',  color: '#a5b4fc' },
+  Verified:      { bg: 'rgba(59,130,246,0.15)',  color: '#93c5fd' },
+  'In-Progress': { bg: 'rgba(245,158,11,0.15)',  color: '#fcd34d' },
+  Escalated:     { bg: 'rgba(239,68,68,0.15)',   color: '#fca5a5' },
+  Resolved:      { bg: 'rgba(34,197,94,0.15)',   color: '#86efac' },
 }
 
-const SEVERITY_COLOR = (s) =>
-  s >= 8 ? 'text-red-600' : s >= 5 ? 'text-amber-600' : 'text-green-600'
-
 export default function IssueDetail() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [issue, setIssue]       = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [letter, setLetter]     = useState('')
-  const [genLoading, setGenLoading] = useState(false)
-  const [copied, setCopied]     = useState(false)
-  const [upvoted, setUpvoted]   = useState(false)
+  const { id }                          = useParams()
+  const navigate                        = useNavigate()
+  const { uid, isAnonymous }            = useAuth()
+  const [issue, setIssue]               = useState(null)
+  const [loading, setLoading]           = useState(true)
+  const [letter, setLetter]             = useState('')
+  const [genLoading, setGenLoading]     = useState(false)
+  const [copied, setCopied]             = useState(false)
+  const [upvoted, setUpvoted]           = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/issues/${id}`)
@@ -30,6 +30,14 @@ export default function IssueDetail() {
       .then(d => { setIssue(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [id])
+
+  async function handleUpvote() {
+    if (upvoted) return
+    const fd = new URLSearchParams({ user_id: uid })  // ← real UID
+    await fetch(`${API_BASE}/api/issues/${id}/upvote`, { method: 'POST', body: fd })
+    setUpvoted(true)
+    setIssue(prev => ({ ...prev, upvotes: (prev.upvotes || 0) + 1 }))
+  }
 
   async function handleGenerateLetter() {
     setGenLoading(true)
@@ -45,15 +53,6 @@ export default function IssueDetail() {
     }
   }
 
-  async function handleUpvote() {
-    await fetch(`${API_BASE}/api/issues/${id}/upvote`, {
-      method: 'POST',
-      body: new URLSearchParams({ user_id: 'anonymous' }),
-    })
-    setUpvoted(true)
-    setIssue(prev => ({ ...prev, upvotes: (prev.upvotes || 0) + 1 }))
-  }
-
   function handleCopy() {
     navigator.clipboard.writeText(letter)
     setCopied(true)
@@ -66,151 +65,155 @@ export default function IssueDetail() {
     window.open(`mailto:?subject=${subject}&body=${body}`)
   }
 
+  const statusStyle = STATUS_STYLE[issue?.status] || { bg: 'rgba(99,102,241,0.1)', color: '#a5b4fc' }
+  const statusClass = issue?.status?.toLowerCase().replace(/[^a-z]/g, '-') || 'reported'
+
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260, gap: 12, color: 'var(--text-secondary)' }}>
+      <div style={{
+        width: 24, height: 24, border: '3px solid var(--surface-border)',
+        borderTopColor: 'var(--color-primary-500)', borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      Loading issue…
     </div>
   )
 
   if (!issue) return (
-    <div className="max-w-2xl mx-auto p-6 text-center">
-      <p className="text-gray-500">Issue not found.</p>
-      <button onClick={() => navigate('/')} className="mt-4 text-blue-600 underline">
-        Back to map
+    <div className="page-container" style={{ textAlign: 'center' }}>
+      <p style={{ color: 'var(--text-secondary)' }}>Issue not found.</p>
+      <button className="btn-secondary" onClick={() => navigate('/')} style={{ marginTop: 16 }}>
+        ← Back to map
       </button>
     </div>
   )
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
+    <div className="page-container animate-fade-in" style={{ maxWidth: 680 }}>
 
       {/* Back */}
-      <button onClick={() => navigate(-1)} className="text-blue-600 text-sm flex items-center gap-1">
+      <button className="btn-ghost" onClick={() => navigate(-1)} style={{ marginBottom: 16, paddingLeft: 0 }}>
         ← Back
       </button>
 
       {/* Header card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="glass-card" style={{ overflow: 'hidden', marginBottom: 16 }}>
         {issue.image_url && (
-          <img src={issue.image_url} alt="Issue" className="w-full h-56 object-cover" />
+          <img src={issue.image_url} alt="Issue"
+            style={{ width: '100%', height: 220, objectFit: 'cover', display: 'block' }} />
         )}
-        <div className="p-5 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-xl font-semibold text-gray-900">{issue.title}</h1>
-            <span className={`text-xs px-2 py-1 rounded-full border font-medium shrink-0
-              ${STATUS_COLORS[issue.status] || 'bg-gray-100 text-gray-700'}`}>
+        <div style={{ padding: 20 }}>
+          {/* Title + status */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)', flex: 1 }}>
+              {issue.title}
+            </h1>
+            <span className={`status-badge ${statusClass}`} style={{ flexShrink: 0 }}>
               {issue.status}
             </span>
           </div>
 
-          <p className="text-gray-600 text-sm">{issue.summary}</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 14, lineHeight: 1.6 }}>
+            {issue.summary}
+          </p>
 
           {/* Meta row */}
-          <div className="flex flex-wrap gap-4 text-sm text-gray-500 pt-1">
-            <span>
-              Severity:{' '}
-              <span className={`font-semibold ${SEVERITY_COLOR(issue.severity_score)}`}>
-                {issue.severity_score}/10
-              </span>
-            </span>
-            <span>📍 {issue.location?.ward_name}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
+            <span>Severity: <SeverityBadge score={issue.severity_score} /></span>
+            <span>📍 {issue.location?.ward_name || 'Unknown'}</span>
             <span>👍 {issue.upvotes} upvotes</span>
             <span>🏷 {issue.category}</span>
           </div>
 
           {/* Tags */}
           {issue.tags?.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
               {issue.tags.map(tag => (
-                <span key={tag}
-                  className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                  #{tag}
-                </span>
+                <span key={tag} style={{
+                  padding: '2px 10px', borderRadius: 'var(--radius-full)',
+                  fontSize: '0.75rem', background: 'rgba(99,102,241,0.1)',
+                  color: 'var(--text-accent)', border: '1px solid rgba(99,102,241,0.2)',
+                }}>#{tag}</span>
               ))}
             </div>
           )}
 
-          {/* Upvote */}
-          <button
-            onClick={handleUpvote}
-            disabled={upvoted}
-            className={`w-full mt-2 py-2 rounded-xl text-sm font-medium transition
-              ${upvoted
-                ? 'bg-green-50 text-green-700 border border-green-200'
-                : 'bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100'}`}
-          >
-            {upvoted ? '✓ Upvoted' : '👍 Confirm this issue exists'}
+          {/* Upvote button */}
+          <button onClick={handleUpvote} disabled={upvoted}
+            className={upvoted ? 'btn-secondary' : 'btn-secondary'}
+            style={{
+              width: '100%',
+              background: upvoted ? 'rgba(34,197,94,0.1)' : undefined,
+              borderColor: upvoted ? 'rgba(34,197,94,0.3)' : undefined,
+              color: upvoted ? '#86efac' : undefined,
+            }}>
+            {upvoted ? '✓ Confirmed' : '👍 Confirm this issue exists'}
+            {!isAnonymous && !upvoted && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 4 }}>+2 XP</span>}
           </button>
         </div>
       </div>
 
-      {/* AI Analysis card */}
+      {/* AI Analysis */}
       {issue.ai_analysis && (
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">
-            AI Analysis
+        <div className="glass-card" style={{ padding: 16, marginBottom: 16, borderColor: 'rgba(99,102,241,0.25)' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary-400)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+            🤖 AI Analysis
           </p>
-          <p className="text-sm text-blue-900">{issue.ai_analysis.summary}</p>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+            {issue.ai_analysis.summary}
+          </p>
         </div>
       )}
 
       {/* Escalation notice */}
       {issue.status === 'Escalated' && issue.escalation_reason && (
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
-          <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-2">
-            🚨 Escalated to Authorities
-          </p>
-          <p className="text-sm text-orange-900">{issue.escalation_reason}</p>
+        <div className="alert-banner error" style={{ marginBottom: 16, borderRadius: 'var(--radius-lg)', padding: 16 }}>
+          <div>
+            <p style={{ fontWeight: 600, margin: '0 0 4px' }}>🚨 Escalated to Authorities</p>
+            <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.85 }}>{issue.escalation_reason}</p>
+          </div>
         </div>
       )}
 
       {/* Grievance Letter Generator */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-gray-900">Generate Grievance Letter</h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Gemini Pro drafts a formal letter to the Municipal Corporation
-          </p>
-        </div>
+      <div className="glass-card" style={{ padding: 20 }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 4px', color: 'var(--text-primary)' }}>
+          Generate Grievance Letter
+        </h2>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 16px' }}>
+          Gemini Pro drafts a formal letter to the Municipal Corporation
+        </p>
 
-        <button
-          onClick={handleGenerateLetter}
-          disabled={genLoading}
-          className="w-full bg-blue-600 text-white py-3 rounded-xl font-medium
-                     hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-2"
-        >
+        <button onClick={handleGenerateLetter} disabled={genLoading}
+          className="btn-primary" style={{ width: '100%', marginBottom: letter ? 16 : 0 }}>
           {genLoading
-            ? <><span className="animate-spin">⏳</span> Drafting with Gemini Pro…</>
+            ? <><span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block' }}>⏳</span> Drafting with Gemini Pro…</>
             : '📄 Generate Official Grievance Letter'}
         </button>
 
         {letter && (
-          <div className="space-y-3">
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <pre className="text-xs text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">
+          <>
+            <div style={{
+              background: 'var(--surface-elevated)', borderRadius: 'var(--radius-md)',
+              padding: 16, marginBottom: 12, border: '1px solid var(--surface-border)',
+            }}>
+              <pre style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', fontFamily: 'monospace', margin: 0, lineHeight: 1.6 }}>
                 {letter}
               </pre>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleCopy}
-                className="flex-1 py-2 rounded-xl border border-gray-200 text-sm
-                           hover:bg-gray-50 transition font-medium"
-              >
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleCopy} className="btn-secondary" style={{ flex: 1 }}>
                 {copied ? '✓ Copied!' : '📋 Copy'}
               </button>
-              <button
-                onClick={handleEmailAuthority}
-                className="flex-1 py-2 rounded-xl bg-green-600 text-white text-sm
-                           hover:bg-green-700 transition font-medium"
-              >
+              <button onClick={handleEmailAuthority} className="btn-primary" style={{ flex: 1 }}>
                 ✉️ Email Authority
               </button>
             </div>
-          </div>
+          </>
         )}
       </div>
 
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

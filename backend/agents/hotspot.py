@@ -3,6 +3,9 @@ from google.ai.generativelanguage_v1beta.types import content
 from firebase_client import db
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -37,53 +40,75 @@ async def run_hotspot_analysis() -> list[dict]:
     Pulls last 100 issues from Firestore, feeds coordinate clusters and
     categories to Gemini 2.5 Pro, and returns predicted risk zones as
     structured JSON suitable for a Leaflet heatmap overlay.
+    Returns an empty list (not a crash) if Gemini fails or data is insufficient.
     """
-    docs = (
-        db.collection("issues")
-        .order_by("created_at", direction="DESCENDING")
-        .limit(100)
-        .stream()
-    )
-
-    historical_data = []
-    for doc in docs:
-        d = doc.to_dict()
-        historical_data.append(
-            {
-                "lat": d["location"]["latitude"],
-                "lng": d["location"]["longitude"],
-                "category": d["ai_analysis"]["category"],
-                "severity": d["ai_analysis"]["severity_score"],
-                "status": d.get("status"),
-            }
+    try:
+        docs = (
+            db.collection("issues")
+            .order_by("created_at", direction="DESCENDING")
+            .limit(100)
+            .stream()
         )
 
-    if len(historical_data) < 5:
-        return []  # Not enough data to predict
+        historical_data = []
+        for doc in docs:
+            try:
+                d = doc.to_dict()
+                historical_data.append(
+                    {
+                        "lat": d["location"]["latitude"],
+                        "lng": d["location"]["longitude"],
+                        "category": d["ai_analysis"]["category"],
+                        "severity": d["ai_analysis"]["severity_score"],
+                        "status": d.get("status"),
+                    }
+                )
+            except (KeyError, TypeError):
+                # Skip malformed documents
+                continue
 
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-pro",
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=HOTSPOT_SCHEMA,
-        ),
-        system_instruction=(
-            "You are an urban infrastructure risk prediction system. "
-            "Analyze spatial clusters of civic issue reports. "
-            "Identify zones where frequency or pattern of minor failures "
-            "indicates imminent larger infrastructure breakdown. "
-            "Return geographic cluster centroids with risk assessments."
-        ),
-    )
+        if len(historical_data) < 5:
+            logger.info(
+                f"[Hotspot] Only {len(historical_data)} issues — need ≥5 for prediction"
+            )
+            return []
 
-    prompt = (
-        f"Here are the last {len(historical_data)} civic issue reports:\n"
-        f"{json.dumps(historical_data, indent=2)}\n\n"
-        "Identify spatial clusters showing elevated risk. "
-        "For each cluster, provide its centroid coordinates, risk level "
-        "(High/Medium/Low), predicted hazard type, preventative recommendation, "
-        "and your confidence score (0.0-1.0)."
-    )
+        model = genai.GenerativeModel(
+            model_name="gemini-2.5-pro",
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=HOTSPOT_SCHEMA,
+            ),
+            system_instruction=(
+                "You are an urban infrastructure risk prediction system. "
+                "Analyze spatial clusters of civic issue reports. "
+                "Identify zones where frequency or pattern of minor failures "
+                "indicates imminent larger infrastructure breakdown. "
+                "Return geographic cluster centroids with risk assessments."
+            ),
+        )
 
-    response = model.generate_content(prompt)
-    return json.loads(response.text)
+        prompt = (
+            f"Here are the last {len(historical_data)} civic issue reports:\n"
+            f"{json.dumps(historical_data, indent=2)}\n\n"
+            "Identify spatial clusters showing elevated risk. "
+            "For each cluster, provide its centroid coordinates, risk level "
+            "(High/Medium/Low), predicted hazard type, preventative recommendation, "
+            "and your confidence score (0.0-1.0)."
+        )
+
+        response = model.generate_content(prompt)
+        result = json.loads(response.text)
+
+        if not isinstance(result, list):
+            logger.warning("[Hotspot] Gemini returned non-list — returning empty")
+            return []
+
+        return result
+
+    except json.JSONDecodeError as e:
+        logger.warning(f"[Hotspot] Malformed JSON from Gemini: {e}")
+        return []
+    except Exception as e:
+        logger.warning(f"[Hotspot] Analysis failed: {e}")
+        return []

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 
-const API_BASE = import.meta.env.VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 const BADGE_META = {
   first_reporter:   { icon: '🌱', label: 'First Reporter',   desc: 'Submitted your first issue' },
   community_helper: { icon: '🤝', label: 'Community Helper', desc: 'Confirmed 10+ existing issues' },
   civic_champion:   { icon: '🏆', label: 'Civic Champion',   desc: 'Earned 200+ XP' },
-  ward_guardian:    { icon: '🛡️', label: 'Ward Guardian',    desc: 'Earned 500+ XP' },
+  ward_guardian:    { icon: '🛡️', label: 'Ward Guardian',   desc: 'Earned 500+ XP' },
 }
 
 const XP_ACTIONS = [
@@ -16,7 +17,14 @@ const XP_ACTIONS = [
   { action: 'Upvote a report',           xp: '+2 XP'  },
 ]
 
+const TABS = [
+  { key: 'citizens', label: '👤 Citizens' },
+  { key: 'wards',    label: '🏘 Wards'    },
+  { key: 'badges',   label: '🏅 Badges'   },
+]
+
 export default function Leaderboard() {
+  const { uid }                   = useAuth()
   const [users, setUsers]         = useState([])
   const [wards, setWards]         = useState([])
   const [tab, setTab]             = useState('citizens')
@@ -34,139 +42,114 @@ export default function Leaderboard() {
   }, [])
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
+    <div className="page-container animate-fade-in" style={{ maxWidth: 680 }}>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Community Leaderboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Earn XP by reporting and verifying civic issues
-        </p>
-      </div>
+      <h1 className="page-title">Community Leaderboard</h1>
+      <p className="page-subtitle">Earn XP by reporting and verifying civic issues in your ward</p>
 
       {/* XP guide */}
-      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">
+      <div className="glass-card" style={{ padding: 16, marginBottom: 20, borderColor: 'rgba(99,102,241,0.25)' }}>
+        <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-primary-400)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
           How to earn XP
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {XP_ACTIONS.map(({ action, xp }) => (
-            <div key={action} className="flex items-center justify-between
-                                         bg-white rounded-xl px-3 py-2 text-sm">
-              <span className="text-gray-700">{action}</span>
-              <span className="font-semibold text-blue-600 ml-2 shrink-0">{xp}</span>
+            <div key={action} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)',
+              padding: '8px 12px', fontSize: '0.82rem',
+            }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{action}</span>
+              <span className="xp-badge" style={{ marginLeft: 8 }}>{xp}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Tab switcher */}
-      <div className="flex bg-gray-100 rounded-xl p-1">
-        {[
-          { key: 'citizens', label: '👤 Citizens' },
-          { key: 'wards',    label: '🏘 Wards'    },
-          { key: 'badges',   label: '🏅 Badges'   },
-        ].map(({ key, label }) => (
-          <button key={key}
-            onClick={() => setTab(key)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition
-              ${tab === key ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
-          >
+      <div style={{
+        display: 'flex', background: 'var(--surface-elevated)',
+        borderRadius: 'var(--radius-md)', padding: 4, marginBottom: 16,
+        border: '1px solid var(--surface-border)',
+      }}>
+        {TABS.map(({ key, label }) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 'var(--radius-sm)',
+              border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500,
+              transition: 'all var(--transition-fast)',
+              background: tab === key ? 'var(--surface-card)' : 'transparent',
+              color: tab === key ? 'var(--text-primary)' : 'var(--text-muted)',
+              boxShadow: tab === key ? 'var(--shadow-card)' : 'none',
+            }}>
             {label}
           </button>
         ))}
       </div>
 
+      {/* Loading */}
       {loading && (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 40, gap: 12, color: 'var(--text-secondary)' }}>
+          <div style={{
+            width: 24, height: 24, border: '3px solid var(--surface-border)',
+            borderTopColor: 'var(--color-primary-500)', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          Loading…
         </div>
       )}
 
-      {/* Citizens tab */}
+      {/* ── Citizens tab ── */}
       {!loading && tab === 'citizens' && (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {users.length === 0 && (
-            <p className="text-center text-gray-400 py-8">No citizens yet — be the first!</p>
-          )}
-          {users.map((user, i) => (
-            <div key={user.uid}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4
-                         flex items-center gap-4">
-              {/* Rank */}
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center
-                               font-bold text-sm shrink-0
-                ${i === 0 ? 'bg-yellow-100 text-yellow-700' :
-                  i === 1 ? 'bg-gray-100 text-gray-600' :
-                  i === 2 ? 'bg-orange-100 text-orange-600' :
-                  'bg-blue-50 text-blue-600'}`}>
-                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">
-                  {user.display_name || user.uid?.slice(0, 8) || 'Anonymous'}
-                </p>
-                {/* Badges */}
-                {user.badges?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {user.badges.map(b => (
-                      <span key={b} className="text-xs bg-gray-50 border border-gray-100
-                                               rounded-full px-2 py-0.5">
-                        {BADGE_META[b]?.icon} {BADGE_META[b]?.label || b}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* XP */}
-              <div className="text-right shrink-0">
-                <p className="font-bold text-blue-600">{user.xp || 0}</p>
-                <p className="text-xs text-gray-400">XP</p>
-              </div>
+            <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              No citizens yet — be the first!
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Wards tab — Civic Transparency Score */}
-      {!loading && tab === 'wards' && (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500 px-1">
-            Transparency Score = issues resolved in last 30 days ÷ issues raised × 100
-          </p>
-          {wards.length === 0 && (
-            <p className="text-center text-gray-400 py-8">No ward data yet</p>
           )}
-          {wards.map((ward, i) => {
-            const score = ward.transparency_score || 0
-            const color = score >= 70 ? 'bg-green-500'
-                        : score >= 40 ? 'bg-amber-500'
-                        : 'bg-red-500'
+          {users.map((user, i) => {
+            const isMe = user.uid === uid
+            const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`
+            const rankBg   = i === 0 ? 'rgba(245,158,11,0.15)' : i === 1 ? 'rgba(148,163,184,0.15)' : i === 2 ? 'rgba(234,88,12,0.15)' : 'rgba(99,102,241,0.1)'
             return (
-              <div key={ward.ward_name}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      #{i + 1} {ward.ward_name}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {ward.issues_resolved}/{ward.issues_raised} issues resolved
-                    </p>
-                  </div>
-                  <span className={`text-white text-sm font-bold px-3 py-1 rounded-full ${color}`}>
-                    {score}%
-                  </span>
+              <div key={user.uid} className="glass-card"
+                style={{
+                  padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14,
+                  borderColor: isMe ? 'rgba(99,102,241,0.4)' : undefined,
+                }}>
+                {/* Rank */}
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  background: rankBg, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: i < 3 ? '1.1rem' : '0.8rem',
+                  fontWeight: 700, color: 'var(--text-primary)',
+                }}>{rankIcon}</div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: '0 0 3px', fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {user.display_name || user.uid?.slice(0, 10) || 'Anonymous'}
+                    {isMe && <span style={{ fontSize: '0.7rem', background: 'rgba(99,102,241,0.2)', color: 'var(--text-accent)', padding: '1px 6px', borderRadius: 99 }}>You</span>}
+                  </p>
+                  {user.badges?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {user.badges.map(b => (
+                        <span key={b} style={{
+                          fontSize: '0.72rem', padding: '1px 8px', borderRadius: 99,
+                          background: 'var(--surface-elevated)', color: 'var(--text-secondary)',
+                          border: '1px solid var(--surface-border)',
+                        }}>
+                          {BADGE_META[b]?.icon} {BADGE_META[b]?.label || b}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {/* Progress bar */}
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${color}`}
-                    style={{ width: `${score}%` }}
-                  />
+
+                {/* XP */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 800, fontSize: '1.1rem', color: 'var(--color-primary-400)' }}>{user.xp || 0}</p>
+                  <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)' }}>XP</p>
                 </div>
               </div>
             )
@@ -174,20 +157,61 @@ export default function Leaderboard() {
         </div>
       )}
 
-      {/* Badges tab */}
+      {/* ── Wards tab ── */}
+      {!loading && tab === 'wards' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+            Transparency Score = issues resolved ÷ issues raised (last 30 days) × 100
+          </p>
+          {wards.length === 0 && (
+            <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              No ward data yet — submit some issues first
+            </div>
+          )}
+          {wards.map((ward, i) => {
+            const score = ward.transparency_score || 0
+            const barColor = score >= 70 ? 'var(--severity-low)' : score >= 40 ? 'var(--severity-medium)' : 'var(--severity-high)'
+            return (
+              <div key={ward.ward_name} className="glass-card" style={{ padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      #{i + 1} {ward.ward_name}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {ward.issues_resolved}/{ward.issues_raised} issues resolved
+                    </p>
+                  </div>
+                  <span style={{
+                    fontWeight: 800, fontSize: '1.1rem', padding: '4px 14px',
+                    borderRadius: 'var(--radius-full)', background: `${barColor}22`,
+                    color: barColor, border: `1px solid ${barColor}44`,
+                  }}>{score}%</span>
+                </div>
+                {/* Progress bar */}
+                <div style={{ height: 6, background: 'var(--surface-border)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${score}%`, background: barColor, borderRadius: 99, transition: 'width 1s ease-out' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Badges tab ── */}
       {!loading && tab === 'badges' && (
-        <div className="grid grid-cols-2 gap-3">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {Object.entries(BADGE_META).map(([key, { icon, label, desc }]) => (
-            <div key={key}
-              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
-              <div className="text-3xl mb-2">{icon}</div>
-              <p className="font-semibold text-gray-900 text-sm">{label}</p>
-              <p className="text-xs text-gray-400 mt-1">{desc}</p>
+            <div key={key} className="glass-card" style={{ padding: 20, textAlign: 'center' }}>
+              <div style={{ fontSize: '2.2rem', marginBottom: 8 }}>{icon}</div>
+              <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{label}</p>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>{desc}</p>
             </div>
           ))}
         </div>
       )}
 
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

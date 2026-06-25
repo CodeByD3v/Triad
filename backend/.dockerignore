@@ -1,0 +1,39 @@
+# ── Secrets — NEVER include in Docker image ───────────────────────────────────
+serviceAccountKey.json
+.env
+.env.*
+*.pem
+*.key
+
+# ── Python artifacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+triage_venv/
+
+# ── Dev / IDE ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+*.log
+
+# ── Test files ────────────────────────────────────────────────────────────────
+tests/
+test_*.py
+*_test.py
+pytest.ini
+.pytest_cache/

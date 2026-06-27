@@ -2,6 +2,9 @@ from math import cos, radians
 import google.generativeai as genai
 from firebase_client import db
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -25,52 +28,70 @@ async def check_for_duplicate(
     Queries Firestore for issues within 50m, then asks Gemini Flash
     whether the new report describes the same physical problem.
     Returns the matching issue_id, or None if unique.
+    Never raises — returns None on any failure so issue submission is never blocked.
     """
-    box = get_bounding_box(lat, lng, radius_m=50)
+    try:
+        box = get_bounding_box(lat, lng, radius_m=50)
 
-    # Firestore: filter by latitude, then filter longitude in memory
-    # (Firestore doesn't support dual-range inequality on different fields)
-    query = (
-        db.collection("issues")
-        .where("location.latitude", ">=", box["lat_min"])
-        .where("location.latitude", "<=", box["lat_max"])
-        .stream()
-    )
-
-    existing = []
-    for doc in query:
-        data = doc.to_dict()
-        lng_val = data["location"]["longitude"]
-        if box["lng_min"] <= lng_val <= box["lng_max"] and data.get(
-            "status"
-        ) != "Resolved":
-            existing.append(
-                {
-                    "id": doc.id,
-                    "category": data["ai_analysis"]["category"],
-                    "summary": data["ai_analysis"]["summary"],
-                }
+        # Firestore: filter by latitude, then filter longitude in memory
+        # (Firestore doesn't support dual-range inequality on different fields)
+        # Requires composite index on location.latitude + created_at
+        try:
+            query = (
+                db.collection("issues")
+                .where("location.latitude", ">=", box["lat_min"])
+                .where("location.latitude", "<=", box["lat_max"])
+                .stream()
             )
+        except Exception as e:
+            logger.warning(
+                f"[Dedup] Firestore query failed (index may not exist yet): {e}"
+                " — treating as unique, issue will be created normally"
+            )
+            return None
 
-    if not existing:
+        existing = []
+        for doc in query:
+            try:
+                data = doc.to_dict()
+                lng_val = data["location"]["longitude"]
+                if (
+                    box["lng_min"] <= lng_val <= box["lng_max"]
+                    and data.get("status") != "Resolved"
+                ):
+                    existing.append(
+                        {
+                            "id": doc.id,
+                            "category": data["ai_analysis"]["category"],
+                            "summary": data["ai_analysis"]["summary"],
+                        }
+                    )
+            except (KeyError, TypeError):
+                continue  # skip malformed documents
+
+        if not existing:
+            return None
+
+        model = genai.GenerativeModel(
+            model_name="gemini-2.5-flash",
+            system_instruction=(
+                "You compare civic issue reports. Be precise. "
+                "Output ONLY the matching issue ID, or the word UNIQUE."
+            ),
+        )
+
+        prompt = (
+            f'A citizen just reported: "{new_summary}"\n\n'
+            f"Existing unresolved issues within 50 meters:\n{existing}\n\n"
+            "Does the new report describe the EXACT SAME physical failure as one of these? "
+            "If yes, output only the matching issue ID. If it is a different problem, output UNIQUE."
+        )
+
+        response = model.generate_content(prompt)
+        result = response.text.strip()
+        valid_ids = [e["id"] for e in existing]
+        return result if (result != "UNIQUE" and result in valid_ids) else None
+
+    except Exception as e:
+        logger.warning(f"[Dedup] Unexpected error: {e} — treating as unique")
         return None
-
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=(
-            "You compare civic issue reports. Be precise. "
-            "Output ONLY the matching issue ID, or the word UNIQUE."
-        ),
-    )
-
-    prompt = (
-        f'A citizen just reported: "{new_summary}"\n\n'
-        f"Existing unresolved issues within 50 meters:\n{existing}\n\n"
-        "Does the new report describe the EXACT SAME physical failure as one of these? "
-        "If yes, output only the matching issue ID. If it is a different problem, output UNIQUE."
-    )
-
-    response = model.generate_content(prompt)
-    result = response.text.strip()
-    valid_ids = [e["id"] for e in existing]
-    return result if (result != "UNIQUE" and result in valid_ids) else None

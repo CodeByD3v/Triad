@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import SeverityBadge from '../components/SeverityBadge'
 import 'leaflet/dist/leaflet.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
+const API_BASE       = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 const SEVERITY_COLOR = (s) => s >= 8 ? '#ef4444' : s >= 5 ? '#f59e0b' : '#22c55e'
 const STATUS_FILTERS = ['all', 'Reported', 'Verified', 'In-Progress', 'Escalated', 'Resolved']
+const DEFAULT_CENTER = [20.5937, 78.9629]
+const DEFAULT_ZOOM   = 5
 
 function MapResizer() {
   const map = useMap()
@@ -14,13 +16,29 @@ function MapResizer() {
   return null
 }
 
+/** Flies map to user's current geolocation on first load */
+function FlyToUser() {
+  const map = useMap()
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        map.flyTo([pos.coords.latitude, pos.coords.longitude], 13, { duration: 1.5 })
+      },
+      () => { /* permission denied — stay at default */ },
+      { timeout: 6000 }
+    )
+  }, [map])
+  return null
+}
+
 export default function Dashboard() {
-  const [issues, setIssues]       = useState([])
-  const [hotspots, setHotspots]   = useState([])
-  const [filter, setFilter]       = useState('all')
-  const [loading, setLoading]     = useState(true)
+  const [issues, setIssues]           = useState([])
+  const [hotspots, setHotspots]       = useState([])
+  const [filter, setFilter]           = useState('all')
+  const [loading, setLoading]         = useState(true)
   const [backendDown, setBackendDown] = useState(false)
-  const [view, setView]           = useState('map')
+  const [view, setView]               = useState('map')
   const navigate = useNavigate()
 
   const loadData = useCallback(async () => {
@@ -43,7 +61,6 @@ export default function Dashboard() {
       setHotspots(hotspotsData.hotspots || [])
     } catch {
       setBackendDown(true)
-      // Keep any previously cached issues in state
     } finally {
       setLoading(false)
     }
@@ -51,21 +68,18 @@ export default function Dashboard() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const filtered     = filter === 'all' ? issues : issues.filter(i => i.status === filter)
-  const statusClass  = (s) => s?.toLowerCase().replace(/[^a-z]/g, '-') || 'reported'
+  const filtered      = filter === 'all' ? issues : issues.filter(i => i.status === filter)
+  const statusClass   = (s) => s?.toLowerCase().replace(/[^a-z]/g, '-') || 'reported'
   const resolvedCount = issues.filter(i => i.status === 'Resolved').length
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
 
-      {/* ── Backend offline banner ── */}
+      {/* Backend offline banner */}
       {backendDown && (
         <div className="alert-banner error" style={{
-          margin: '12px 20px 0',
-          maxWidth: 1200,
-          alignSelf: 'center',
-          width: 'calc(100% - 40px)',
-          justifyContent: 'space-between',
+          margin: '12px 20px 0', maxWidth: 1200, alignSelf: 'center',
+          width: 'calc(100% - 40px)', justifyContent: 'space-between',
         }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>⚠️</span>
@@ -78,7 +92,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ padding: '20px 20px 0', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
@@ -88,12 +102,8 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className={`btn-ghost ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')}>
-              🗺️ Map
-            </button>
-            <button className={`btn-ghost ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>
-              📋 List
-            </button>
+            <button className={`btn-ghost ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')}>🗺️ Map</button>
+            <button className={`btn-ghost ${view === 'list' ? 'active' : ''}`} onClick={() => setView('list')}>📋 List</button>
           </div>
         </div>
 
@@ -108,14 +118,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 20px 20px' }}>
 
         {loading ? (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flex: 1, gap: 12, color: 'var(--text-secondary)',
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: 'var(--text-secondary)' }}>
             <div style={{
               width: 24, height: 24, border: '3px solid var(--surface-border)',
               borderTopColor: 'var(--color-primary-500)', borderRadius: '50%',
@@ -125,45 +132,38 @@ export default function Dashboard() {
           </div>
 
         ) : view === 'map' ? (
-          /* ── Map View ── */
           <div style={{ flex: 1, borderRadius: 'var(--radius-lg)', overflow: 'hidden', minHeight: 500 }}>
-            <MapContainer center={[20.5937, 78.9629]} zoom={5}
+            <MapContainer
+              center={DEFAULT_CENTER} zoom={DEFAULT_ZOOM}
               style={{ width: '100%', height: '100%', minHeight: 500 }}>
               <MapResizer />
+              <FlyToUser />
               <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                 attribution='&copy; <a href="https://carto.com/">CARTO</a>'
               />
 
-              {/* Issue markers */}
+              {/* Issue markers — color coded by severity */}
               {filtered.map(issue => (
                 <CircleMarker
                   key={issue.id}
                   center={[issue.location?.latitude || 0, issue.location?.longitude || 0]}
                   radius={8}
                   fillColor={SEVERITY_COLOR(issue.severity_score)}
-                  color="rgba(255,255,255,0.3)"
-                  weight={1}
-                  fillOpacity={0.85}
-                  eventHandlers={{ click: () => navigate(`/issue/${issue.id}`) }}
-                >
+                  color="rgba(255,255,255,0.3)" weight={1} fillOpacity={0.85}
+                  eventHandlers={{ click: () => navigate(`/issue/${issue.id}`) }}>
                   <Popup>
                     <div style={{ fontFamily: 'Inter, sans-serif', minWidth: 180 }}>
                       <strong style={{ fontSize: '0.9rem' }}>{issue.category}</strong>
-                      <p style={{ margin: '6px 0', fontSize: '0.8rem', opacity: 0.8 }}>
-                        {issue.summary}
-                      </p>
+                      <p style={{ margin: '6px 0', fontSize: '0.8rem', opacity: 0.8 }}>{issue.summary}</p>
                       <div style={{ display: 'flex', gap: 8, fontSize: '0.75rem', opacity: 0.7, marginBottom: 8 }}>
                         <span>Severity: {issue.severity_score}/10</span>
                         <span>·</span>
                         <span>{issue.upvotes} upvotes</span>
                       </div>
                       <div style={{ marginBottom: 10 }}>
-                        <span className={`status-badge ${statusClass(issue.status)}`}>
-                          {issue.status}
-                        </span>
+                        <span className={`status-badge ${statusClass(issue.status)}`}>{issue.status}</span>
                       </div>
-                      {/* ← View Details button — navigates to IssueDetail */}
                       <button
                         onClick={(e) => { e.stopPropagation(); navigate(`/issue/${issue.id}`) }}
                         style={{
@@ -179,7 +179,7 @@ export default function Dashboard() {
                 </CircleMarker>
               ))}
 
-              {/* Hotspot overlay */}
+              {/* Hotspot overlay — predicted risk zones as dashed red circles */}
               {hotspots.filter(h => h.risk_level === 'High').map((h, i) => (
                 <CircleMarker key={`hs-${i}`}
                   center={[h.cluster_lat, h.cluster_lng]}
@@ -201,15 +201,15 @@ export default function Dashboard() {
               display: 'flex', gap: 20, padding: '10px 16px', marginTop: 12,
               fontSize: '0.8rem', color: 'var(--text-secondary)', flexWrap: 'wrap',
             }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="severity-dot high" /> High (8–10)
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="severity-dot medium" /> Medium (5–7)
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="severity-dot low" /> Low (1–4)
-              </span>
+              {[
+                { label: 'High (8–10)', cls: 'high' },
+                { label: 'Medium (5–7)', cls: 'medium' },
+                { label: 'Low (1–4)', cls: 'low' },
+              ].map(({ label, cls }) => (
+                <span key={cls} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className={`severity-dot ${cls}`} /> {label}
+                </span>
+              ))}
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
                   width: 12, height: 12, borderRadius: '50%',
@@ -223,38 +223,36 @@ export default function Dashboard() {
           </div>
 
         ) : (
-          /* ── List View ── */
+          /* List View */
           <div style={{ display: 'grid', gap: 12 }}>
             {filtered.length === 0 ? (
               <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                 No issues found for this filter.
               </div>
-            ) : (
-              filtered.map(issue => (
-                <div key={issue.id} className="glass-card"
-                  style={{ padding: 16, cursor: 'pointer' }}
-                  onClick={() => navigate(`/issue/${issue.id}`)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <span className={`status-badge ${statusClass(issue.status)}`}>{issue.status}</span>
-                        <SeverityBadge score={issue.severity_score} />
-                      </div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 4px' }}>{issue.category}</h3>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>{issue.summary}</p>
-                      <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        <span>📍 {issue.location?.ward_name || 'Unknown'}</span>
-                        <span>👍 {issue.upvotes} upvotes</span>
-                      </div>
+            ) : filtered.map(issue => (
+              <div key={issue.id} className="glass-card"
+                style={{ padding: 16, cursor: 'pointer' }}
+                onClick={() => navigate(`/issue/${issue.id}`)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span className={`status-badge ${statusClass(issue.status)}`}>{issue.status}</span>
+                      <SeverityBadge score={issue.severity_score} />
                     </div>
-                    {issue.image_url && (
-                      <img src={issue.image_url} alt=""
-                        style={{ width: 80, height: 80, borderRadius: 'var(--radius-sm)', objectFit: 'cover', border: '1px solid var(--surface-border)' }} />
-                    )}
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 4px' }}>{issue.category}</h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>{issue.summary}</p>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      <span>📍 {issue.location?.ward_name || 'Unknown'}</span>
+                      <span>👍 {issue.upvotes} upvotes</span>
+                    </div>
                   </div>
+                  {issue.image_url && (
+                    <img src={issue.image_url} alt=""
+                      style={{ width: 80, height: 80, borderRadius: 'var(--radius-sm)', objectFit: 'cover', border: '1px solid var(--surface-border)' }} />
+                  )}
                 </div>
-              ))
-            )}
+              </div>
+            ))}
           </div>
         )}
       </div>

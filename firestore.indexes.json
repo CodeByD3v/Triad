@@ -24,6 +24,21 @@
         { "fieldPath": "location.ward_name", "order": "ASCENDING" },
         { "fieldPath": "created_at",         "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "issues",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",     "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "xp", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

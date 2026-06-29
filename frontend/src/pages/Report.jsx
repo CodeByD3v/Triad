@@ -7,10 +7,10 @@ import SeverityBadge from '../components/SeverityBadge'
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export default function Report() {
-  const { uid, isAnonymous } = useAuth()
+  const { uid, isAnonymous }  = useAuth()
   const [image, setImage]     = useState(null)
   const [preview, setPreview] = useState(null)
-  const [description, setDescription] = useState('')
+  const [desc, setDesc]       = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult]   = useState(null)
   const [error, setError]     = useState(null)
@@ -18,262 +18,236 @@ export default function Report() {
   const fileRef  = useRef()
   const navigate = useNavigate()
 
-  function handleImageChange(e) {
+  function pickImage(e) {
     const file = e.target.files[0]
     if (!file) return
-    // Validate file type
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
-      setError('Please select a JPG, PNG or WEBP image')
-      return
-    }
-    // Validate file size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Image must be under 10MB')
-      return
-    }
-    setImage(file)
-    setPreview(URL.createObjectURL(file))
-    setResult(null)
-    setError(null)
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type))
+      return setError('Only JPG, PNG or WEBP images are supported')
+    if (file.size > 10 * 1024 * 1024)
+      return setError('Image must be under 10 MB')
+    setImage(file); setPreview(URL.createObjectURL(file))
+    setError(null); setResult(null)
   }
 
-  async function handleSubmit(e) {
+  async function submit(e) {
     e.preventDefault()
-    if (!image) { setError('Please select an image to analyze'); return }
-    setLoading(true)
-    setError(null)
+    if (!image) return setError('Please select an image first')
+    setLoading(true); setError(null)
 
-    const pos = await new Promise((res, rej) =>
-      navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-    ).catch(() => null)
+    const pos = await new Promise(res =>
+      navigator.geolocation.getCurrentPosition(res, () => res(null), { timeout: 8000 })
+    )
 
     const fd = new FormData()
     fd.append('image',       image)
-    fd.append('latitude',    pos ? pos.coords.latitude  : 0)
-    fd.append('longitude',   pos ? pos.coords.longitude : 0)
-    fd.append('description', description)
-    fd.append('reported_by', uid)   // ← Firebase UID (not hardcoded "anonymous")
+    fd.append('latitude',    pos?.coords.latitude  ?? 0)
+    fd.append('longitude',   pos?.coords.longitude ?? 0)
+    fd.append('description', desc)
+    fd.append('reported_by', uid)
 
     if (!navigator.onLine) {
       await queueSubmission(fd)
-      setLoading(false)
       setResult({ status: 'offline' })
+      setLoading(false)
       return
     }
 
     try {
-      const res  = await fetch(`${API_BASE}/api/issues`, { method: 'POST', body: fd })
-      const data = await res.json()
-      setResult(data)
+      const r = await fetch(`${API_BASE}/api/issues`, { method:'POST', body:fd })
+      setResult(await r.json())
     } catch {
       await queueSubmission(fd)
-      setResult({ status: 'offline' })
+      setResult({ status:'offline' })
     } finally {
       setLoading(false)
     }
   }
 
-  function resetForm() {
-    setImage(null); setPreview(null)
-    setDescription(''); setResult(null); setError(null)
-  }
+  function reset() { setImage(null); setPreview(null); setDesc(''); setResult(null); setError(null) }
 
   return (
-    <div className="page-container animate-fade-in" style={{ maxWidth: 560 }}>
+    <div className="page-container animate-fade-in" style={{ maxWidth:560 }}>
       <h1 className="page-title">Report an Issue</h1>
       <p className="page-subtitle">
-        Take a photo of a civic infrastructure problem and our AI will analyze it instantly.
+        Upload a photo — our AI categorizes it and places it on the map instantly.
       </p>
 
-      {/* Anonymous warning */}
       {isAnonymous && (
-        <div className="alert-banner warning" style={{ marginBottom: 16 }}>
-          <span>⚠️</span>
-          <span>You're in guest mode — sign in with Google to earn XP and badges</span>
+        <div className="alert-banner warning" style={{ marginBottom:16 }}>
+          ⚠️ Guest mode — <strong style={{ marginLeft:4 }}>sign in to earn XP and badges</strong>
         </div>
       )}
 
-      {/* Offline pending banner */}
       {pendingCount > 0 && (
-        <div className="alert-banner info" style={{ marginBottom: 16 }}>
-          <span>📡</span>
-          <span>{pendingCount} report(s) waiting to sync when online</span>
+        <div className="alert-banner info" style={{ marginBottom:16 }}>
+          📡 {pendingCount} report{pendingCount > 1 ? 's' : ''} queued — will sync when online
         </div>
       )}
 
-      {/* Error banner */}
       {error && (
-        <div className="alert-banner error" style={{ marginBottom: 16 }}>
-          <span>⚠️</span><span>{error}</span>
-        </div>
+        <div className="alert-banner error" style={{ marginBottom:16 }}>⚠️ {error}</div>
       )}
 
       {!result ? (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={submit}>
           {/* Upload zone */}
-          <div className={`upload-zone ${preview ? 'has-image' : ''}`}
-            onClick={() => fileRef.current.click()} style={{ marginBottom: 20 }}>
+          <div className={`upload-zone${preview ? ' has-image' : ''}`}
+            onClick={() => fileRef.current.click()} style={{ marginBottom:18 }}>
             {preview ? (
-              <div style={{ position: 'relative' }}>
-                <img src={preview} alt="preview" style={{
-                  maxHeight: 260, maxWidth: '100%',
-                  borderRadius: 'var(--radius-md)', display: 'block', margin: '0 auto',
+              <div style={{ position:'relative' }}>
+                <img src={preview} alt="" style={{
+                  maxHeight:240, maxWidth:'100%', borderRadius:'var(--radius-md)',
+                  display:'block', margin:'0 auto',
                 }} />
                 <button type="button"
-                  onClick={(e) => { e.stopPropagation(); setImage(null); setPreview(null) }}
+                  onClick={e => { e.stopPropagation(); setImage(null); setPreview(null) }}
                   style={{
-                    position: 'absolute', top: 8, right: 8, width: 28, height: 28,
-                    borderRadius: '50%', background: 'rgba(0,0,0,0.7)',
-                    border: 'none', color: 'white', fontSize: '0.9rem',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    position:'absolute', top:8, right:8, width:28, height:28,
+                    borderRadius:'50%', background:'rgba(0,0,0,0.75)',
+                    border:'none', color:'#fff', cursor:'pointer', fontSize:'0.9rem',
+                    display:'flex', alignItems:'center', justifyContent:'center',
                   }}>✕</button>
               </div>
             ) : (
-              <>
+              <div style={{ pointerEvents:'none' }}>
                 <div style={{
-                  width: 56, height: 56, borderRadius: '50%',
-                  background: 'rgba(99, 102, 241, 0.1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  margin: '0 auto 12px', fontSize: '1.5rem',
+                  width:52, height:52, borderRadius:'50%',
+                  background:'rgba(99,102,241,0.1)', margin:'0 auto 12px',
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.4rem',
                 }}>📸</div>
-                <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4, fontSize: '0.95rem' }}>
-                  Tap to capture or upload a photo
+                <p style={{ fontWeight:600, marginBottom:4, fontSize:'0.9rem' }}>
+                  Tap to capture or upload
                 </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
-                  JPG, PNG, WEBP up to 10MB
+                <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', margin:0 }}>
+                  JPG · PNG · WEBP · max 10 MB
                 </p>
-              </>
+              </div>
             )}
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp"
-              capture="environment" style={{ display: 'none' }} onChange={handleImageChange} />
+              capture="environment" style={{ display:'none' }} onChange={pickImage} />
           </div>
 
-          <textarea className="input-field" rows={3}
-            placeholder="Describe the issue (optional) — location details, how long it's been there…"
-            value={description} onChange={(e) => setDescription(e.target.value)}
-            style={{ marginBottom: 20 }} />
+          <textarea className="input-field" rows={3} style={{ marginBottom:16 }}
+            placeholder="Describe the issue — location details, how long it's been there…"
+            value={desc} onChange={e => setDesc(e.target.value)} />
 
-          <div className="glass-card" style={{
-            padding: '12px 16px', marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.85rem',
+          {/* Location note */}
+          <div style={{
+            display:'flex', alignItems:'center', gap:10, padding:'10px 14px', marginBottom:20,
+            background:'var(--surface-elevated)', borderRadius:'var(--radius-md)',
+            border:'1px solid var(--surface-border)', fontSize:'0.82rem',
           }}>
-            <span style={{ fontSize: '1.1rem' }}>📍</span>
+            <span style={{ fontSize:'1.1rem' }}>📍</span>
             <div>
-              <span style={{ color: 'var(--text-secondary)' }}>Location captured automatically</span>
-              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                GPS used for map placement and duplicate detection
-              </span>
+              <div style={{ color:'var(--text-secondary)' }}>GPS location captured automatically</div>
+              <div style={{ color:'var(--text-muted)', fontSize:'0.74rem', marginTop:2 }}>
+                Used for map placement and duplicate detection
+              </div>
             </div>
           </div>
 
           <button type="submit" disabled={loading || !image} className="btn-primary"
-            style={{ width: '100%', padding: '14px 24px', fontSize: '1rem' }}>
-            {loading ? (
-              <>
-                <span style={{
-                  width: 18, height: 18,
-                  border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white',
-                  borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block',
-                }} />
-                Analyzing with AI…
-              </>
-            ) : <>🚀 Submit Report</>}
+            style={{ width:'100%', padding:'13px 0', fontSize:'0.95rem' }}>
+            {loading ? <><div className="spinner" />Analyzing with AI…</> : '🚀 Submit Report'}
           </button>
         </form>
+
       ) : (
         <div className="animate-slide-up">
-          {result.status === 'offline' ? (
-            <div className="glass-card" style={{ padding: 24, textAlign: 'center' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📡</div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 8 }}>Saved for Offline Sync</h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>
-                Your report will be submitted automatically when your connection restores.
+
+          {result.status === 'offline' && (
+            <div className="glass-card" style={{ padding:28, textAlign:'center' }}>
+              <div style={{ fontSize:'2.2rem', marginBottom:12 }}>📡</div>
+              <h2 style={{ fontWeight:700, marginBottom:8 }}>Saved Offline</h2>
+              <p style={{ color:'var(--text-secondary)', fontSize:'0.88rem', marginBottom:20 }}>
+                Your report will sync automatically when you're back online.
               </p>
-              <button className="btn-primary" onClick={resetForm}>Report Another Issue</button>
+              <button className="btn-primary" onClick={reset}>Report Another</button>
             </div>
-          ) : result.status === 'duplicate_updated' ? (
-            <div className="glass-card" style={{ padding: 24 }}>
-              <div className="alert-banner info" style={{ marginBottom: 16 }}>
-                <span>🔍</span><span>Duplicate detected — upvoted existing report</span>
+          )}
+
+          {result.status === 'duplicate_updated' && (
+            <div className="glass-card" style={{ padding:24 }}>
+              <div className="alert-banner info" style={{ marginBottom:16 }}>
+                🔍 Duplicate detected — your report upvoted the existing issue
               </div>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 16 }}>
-                Our AI found this issue has already been reported nearby. Your submission counted as
-                an upvote, increasing its visibility and priority.
+              <p style={{ color:'var(--text-secondary)', fontSize:'0.88rem', marginBottom:18, lineHeight:1.6 }}>
+                Our AI found the same issue already reported nearby. Your submission
+                increased its community upvote count, boosting its priority.
               </p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 <button className="btn-primary" onClick={() => navigate(`/issue/${result.issue_id}`)}>
                   View Issue
                 </button>
-                <button className="btn-secondary" onClick={resetForm}>Report Another</button>
+                <button className="btn-secondary" onClick={reset}>Report Another</button>
               </div>
             </div>
-          ) : (
-            <div className="glass-card" style={{ padding: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          )}
+
+          {result.status === 'created' && (
+            <div className="glass-card" style={{ padding:24 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:18 }}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: '50%',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem',
+                  width:40, height:40, borderRadius:'50%',
+                  background:'rgba(34,197,94,0.15)',
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', flexShrink:0,
                 }}>✅</div>
                 <div>
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Issue Submitted</h2>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-                    AI analysis complete{!isAnonymous && ' · +20 XP earned'}
+                  <h2 style={{ fontWeight:700, fontSize:'1.05rem', margin:0 }}>Issue Submitted!</h2>
+                  <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', margin:0 }}>
+                    AI analysis complete{!isAnonymous ? ' · +20 XP' : ''}
                   </p>
                 </div>
               </div>
 
-              <div style={{
-                background: 'var(--surface-elevated)', borderRadius: 'var(--radius-md)',
-                padding: 16, marginBottom: 16,
-              }}>
-                <h3 style={{
-                  fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)',
-                  textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12,
-                }}>🤖 AI Analysis</h3>
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Category</span>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{result.ai_analysis?.category}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Severity</span>
+              <div style={{ background:'var(--surface-elevated)', borderRadius:'var(--radius-md)', padding:16, marginBottom:18 }}>
+                <p style={{ fontSize:'0.72rem', fontWeight:600, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
+                  🤖 AI Analysis
+                </p>
+                <div style={{ display:'grid', gap:10 }}>
+                  <Row label="Category" value={result.ai_analysis?.category} />
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ color:'var(--text-secondary)', fontSize:'0.84rem' }}>Severity</span>
                     <SeverityBadge score={result.ai_analysis?.severity_score} />
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', display: 'block', marginBottom: 4 }}>
-                      Summary
-                    </span>
-                    <p style={{ fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>
-                      {result.ai_analysis?.summary}
-                    </p>
+                    <span style={{ color:'var(--text-secondary)', fontSize:'0.84rem', display:'block', marginBottom:4 }}>Summary</span>
+                    <p style={{ fontSize:'0.88rem', margin:0, lineHeight:1.5 }}>{result.ai_analysis?.summary}</p>
                   </div>
-                  {result.ai_analysis?.tags && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-                      {result.ai_analysis.tags.map((tag, i) => (
+                  {result.ai_analysis?.tags?.length > 0 && (
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                      {result.ai_analysis.tags.map((t,i) => (
                         <span key={i} style={{
-                          padding: '2px 10px', borderRadius: 'var(--radius-full)',
-                          fontSize: '0.75rem',
-                          background: 'rgba(99, 102, 241, 0.1)', color: 'var(--text-accent)',
-                          border: '1px solid rgba(99, 102, 241, 0.2)',
-                        }}>{tag}</span>
+                          padding:'2px 9px', borderRadius:'var(--radius-full)', fontSize:'0.73rem',
+                          background:'rgba(99,102,241,0.1)', color:'var(--text-accent)',
+                          border:'1px solid rgba(99,102,241,0.2)',
+                        }}>#{t}</span>
                       ))}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 <button className="btn-primary" onClick={() => navigate(`/issue/${result.issue_id}`)}>
                   View on Map
                 </button>
-                <button className="btn-secondary" onClick={resetForm}>Report Another</button>
+                <button className="btn-secondary" onClick={reset}>Report Another</button>
               </div>
             </div>
           )}
+
         </div>
       )}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
+}
+
+function Row({ label, value }) {
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <span style={{ color:'var(--text-secondary)', fontSize:'0.84rem' }}>{label}</span>
+      <span style={{ fontWeight:600, fontSize:'0.88rem' }}>{value}</span>
     </div>
   )
 }

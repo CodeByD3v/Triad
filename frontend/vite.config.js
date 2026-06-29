@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -11,9 +13,9 @@ export default defineConfig({
       manifest: {
         name: 'Community Hero',
         short_name: 'CivicHero',
-        description: 'Report and track community infrastructure issues',
+        description: 'AI-powered civic issue reporting',
         theme_color: '#6366f1',
-        background_color: '#050510',
+        background_color: '#05050f',
         display: 'standalone',
         start_url: '/',
         icons: [
@@ -22,30 +24,26 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cache API issues list for offline viewing
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\/issues(\?.*)?$/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'issues-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 },
+              expiration: { maxEntries: 10, maxAgeSeconds: 86400 },
             },
           },
           {
-            // Cache map tiles for offline map rendering
             urlPattern: /^https:\/\/[a-z]\.basemaps\.cartocdn\.com\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'map-tiles-cache',
-              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheName: 'map-tiles',
+              expiration: { maxEntries: 500, maxAgeSeconds: 604800 },
             },
           },
         ],
       },
     }),
   ],
-  server: {
-    port: 5173,
-  },
+  server: { port: 5173 },
 })

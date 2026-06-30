@@ -36,6 +36,6 @@ jobs:
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken:              ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId:              ${{ secrets.FIREBASE_PROJECT_ID }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRIAD_61B24 }}
+          projectId:              triad-61b24
           channelId:              live

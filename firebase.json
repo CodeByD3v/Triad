@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "CivicSnap",
+    "public": "frontend/dist",
     "ignore": [
       "firebase.json",
       "**/.*",

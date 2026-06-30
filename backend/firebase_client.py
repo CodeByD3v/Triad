@@ -29,5 +29,8 @@ try:
             firebase_admin.initialize_app()
 
     db = firestore.client()
-except Exception:
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    print(f"Firebase initialization failed: {e}")
     db = _UnavailableFirebase()

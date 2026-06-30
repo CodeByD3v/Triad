@@ -279,7 +279,7 @@ def _award_xp(user_id: str, xp: int, badge_check: str):
             return
 
         data = user_doc.to_dict()
-        total_xp = data.get("xp", 0) + xp
+        total_xp = data.get("xp", 0)
         badges = data.get("badges", [])
 
         milestones = {

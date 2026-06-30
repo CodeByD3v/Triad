@@ -32,13 +32,6 @@
         { "fieldPath": "status",     "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "xp", "order": "DESCENDING" }
-      ]
     }
   ],
   "fieldOverrides": []

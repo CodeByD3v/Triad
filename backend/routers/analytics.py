@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from agents.hotspot import run_hotspot_analysis
 from agents.escalation import run_escalation_check
 from firebase_client import db
@@ -14,9 +14,9 @@ async def get_hotspots():
 
 
 @router.post("/analytics/run-escalation")
-async def trigger_escalation():
+async def trigger_escalation(background_tasks: BackgroundTasks):
     """Manually triggers the escalation agent (also runs on a cron schedule)."""
-    await run_escalation_check()
+    background_tasks.add_task(run_escalation_check)
     return {"status": "escalation_check_complete"}
 
 

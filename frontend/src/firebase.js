@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   signInWithPopup,
+  signOut,
 } from 'firebase/auth'
 
 const firebaseConfig = {
@@ -26,4 +27,6 @@ export {
   onAuthStateChanged,
   signInWithPopup,
   signInAnonymously,
+  getAuth,
+  signOut,
 }
